@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDF Editor</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  </head>
+  <body>
+    <div class="container">
+      <header class="header">
+        <h1>🔥 PDF Editor Pro</h1>
+        <div class="toolbar">
+          <button id="saveBtn" class="btn btn-primary" disabled>
+            💾 Save PDF
+          </button>
+          <button id="addPageBtn" class="btn" disabled>➕ Add Page</button>
+          <button id="deletePageBtn" class="btn btn-danger" disabled>
+            🗑️ Delete Page
+          </button>
+        </div>
+      </header>
+
+      <div class="main-content">
+        <div class="sidebar">
+          <div class="drop-zone" id="dropZone">
+            <div class="drop-content">
+              <div class="drop-icon">📁</div>
+              <p>Drop PDF here or click to browse</p>
+              <input type="file" id="fileInput" accept=".pdf" hidden />
+            </div>
+          </div>
+
+          <div class="pages-panel" id="pagesPanel" style="display: none">
+            <h3>Pages</h3>
+            <div class="pages-list" id="pagesList"></div>
+          </div>
+        </div>
+
+        <div class="editor-area">
+          <div class="pdf-viewer" id="pdfViewer">
+            <div class="welcome-message">
+              <h2>Welcome to PDF Editor Pro! 🚀</h2>
+              <p>Drop a PDF file to start editing</p>
+            </div>
+          </div>
+
+          <div class="text-editor" id="textEditor" style="display: none">
+            <h3>Edit Text</h3>
+            <textarea
+              id="textArea"
+              placeholder="Select text to edit..."
+            ></textarea>
+            <button id="applyTextBtn" class="btn btn-primary">
+              Apply Changes
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
