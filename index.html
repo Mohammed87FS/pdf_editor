@@ -11,15 +11,15 @@
   <body>
     <div class="container">
       <header class="header">
-        <h1>🔥 PDF Editor Pro</h1>
+        <h1>PDF Editor</h1>
         <div class="toolbar">
-          <button id="saveBtn" class="btn btn-primary" disabled>
-            💾 Save PDF
+          <button id="undoBtn" class="btn btn-secondary" disabled>
+            ↶ Undo
           </button>
-          <button id="addPageBtn" class="btn" disabled>➕ Add Page</button>
-          <button id="deletePageBtn" class="btn btn-danger" disabled>
-            🗑️ Delete Page
+          <button id="addPageBtn" class="btn btn-secondary" disabled>
+            + Add Page
           </button>
+          <button id="saveBtn" class="btn btn-primary" disabled>Save</button>
         </div>
       </header>
 
@@ -27,8 +27,8 @@
         <div class="sidebar">
           <div class="drop-zone" id="dropZone">
             <div class="drop-content">
-              <div class="drop-icon">📁</div>
-              <p>Drop PDF here or click to browse</p>
+              <div class="drop-icon">📄</div>
+              <p>Drop PDF or click to browse</p>
               <input type="file" id="fileInput" accept=".pdf" hidden />
             </div>
           </div>
@@ -42,7 +42,7 @@
         <div class="editor-area">
           <div class="pdf-viewer" id="pdfViewer">
             <div class="welcome-message">
-              <h2>Welcome to PDF Editor Pro! 🚀</h2>
+              <h2>Welcome to PDF Editor</h2>
               <p>Drop a PDF file to start editing</p>
             </div>
           </div>
@@ -51,11 +51,9 @@
             <h3>Edit Text</h3>
             <textarea
               id="textArea"
-              placeholder="Select text to edit..."
+              placeholder="Click on PDF to edit text..."
             ></textarea>
-            <button id="applyTextBtn" class="btn btn-primary">
-              Apply Changes
-            </button>
+            <button id="applyTextBtn" class="btn btn-primary">Apply</button>
           </div>
         </div>
       </div>

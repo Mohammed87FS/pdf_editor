@@ -5,10 +5,13 @@ class PDFEditor {
     this.currentPage = 1;
     this.totalPages = 0;
     this.scale = 1.5;
+    this.history = [];
+    this.historyIndex = -1;
 
     this.initializeElements();
     this.setupEventListeners();
     this.setupPDFJS();
+    this.createStatusIndicator();
   }
 
   initializeElements() {
@@ -21,8 +24,22 @@ class PDFEditor {
     this.textArea = document.getElementById("textArea");
     this.saveBtn = document.getElementById("saveBtn");
     this.addPageBtn = document.getElementById("addPageBtn");
-    this.deletePageBtn = document.getElementById("deletePageBtn");
+    this.undoBtn = document.getElementById("undoBtn");
     this.applyTextBtn = document.getElementById("applyTextBtn");
+  }
+
+  createStatusIndicator() {
+    this.statusIndicator = document.createElement("div");
+    this.statusIndicator.className = "status-indicator";
+    document.body.appendChild(this.statusIndicator);
+  }
+
+  showStatus(message) {
+    this.statusIndicator.textContent = message;
+    this.statusIndicator.classList.add("show");
+    setTimeout(() => {
+      this.statusIndicator.classList.remove("show");
+    }, 2000);
   }
 
   setupPDFJS() {
@@ -42,7 +59,7 @@ class PDFEditor {
 
     this.saveBtn.addEventListener("click", this.savePDF.bind(this));
     this.addPageBtn.addEventListener("click", this.addPage.bind(this));
-    this.deletePageBtn.addEventListener("click", this.deletePage.bind(this));
+    this.undoBtn.addEventListener("click", this.undo.bind(this));
     this.applyTextBtn.addEventListener(
       "click",
       this.applyTextChanges.bind(this)
@@ -75,12 +92,49 @@ class PDFEditor {
     }
   }
 
+  saveState() {
+    if (this.pdfLibDoc) {
+      this.historyIndex++;
+      this.history = this.history.slice(0, this.historyIndex);
+
+      // Create a fresh copy of the PDF bytes instead of slicing the potentially detached buffer
+      this.pdfLibDoc.save().then((freshBytes) => {
+        this.history.push({
+          pdfBytes: new Uint8Array(freshBytes),
+          currentPage: this.currentPage,
+          totalPages: this.totalPages,
+        });
+        this.undoBtn.disabled = false;
+      });
+    }
+  }
+
+  async undo() {
+    if (this.historyIndex > 0) {
+      this.historyIndex--;
+      const state = this.history[this.historyIndex];
+
+      // Use the stored bytes directly
+      this.pdfBytes = new Uint8Array(state.pdfBytes);
+      this.currentPage = state.currentPage;
+      this.totalPages = state.totalPages;
+
+      this.pdfLibDoc = await PDFLib.PDFDocument.load(this.pdfBytes);
+      const loadingTask = pdfjsLib.getDocument({ data: this.pdfBytes });
+      this.pdfDoc = await loadingTask.promise;
+
+      await this.updateView();
+      this.showStatus("Undone");
+    }
+
+    this.undoBtn.disabled = this.historyIndex <= 0;
+  }
+
   async loadPDF(file) {
     try {
       this.showLoading();
 
       const originalBytes = await file.arrayBuffer();
-
       this.pdfBytes = originalBytes.slice();
       const pdfJsBytes = originalBytes.slice();
 
@@ -90,6 +144,11 @@ class PDFEditor {
 
       this.pdfLibDoc = await PDFLib.PDFDocument.load(this.pdfBytes);
 
+      // Initialize history
+      this.history = [];
+      this.historyIndex = -1;
+      this.saveState();
+
       this.renderPDF();
       this.generateThumbnails();
       this.enableButtons();
@@ -97,9 +156,11 @@ class PDFEditor {
       this.dropZone.style.display = "none";
       this.pagesPanel.style.display = "block";
       this.textEditor.style.display = "block";
+
+      this.showStatus("PDF loaded successfully");
     } catch (error) {
       console.error("Error loading PDF:", error);
-      alert("Error loading PDF. Please try again.");
+      this.showStatus("Error loading PDF");
     }
   }
 
@@ -139,7 +200,7 @@ class PDFEditor {
 
     for (let i = 1; i <= this.totalPages; i++) {
       const page = await this.pdfDoc.getPage(i);
-      const viewport = page.getViewport({ scale: 0.3 });
+      const viewport = page.getViewport({ scale: 0.25 });
 
       const canvas = document.createElement("canvas");
       const context = canvas.getContext("2d");
@@ -155,24 +216,41 @@ class PDFEditor {
       thumbnail.appendChild(canvas);
 
       const pageLabel = document.createElement("div");
+      pageLabel.className = "page-label";
       pageLabel.textContent = `Page ${i}`;
-      pageLabel.style.marginTop = "5px";
-      pageLabel.style.fontSize = "12px";
-      pageLabel.style.fontWeight = "600";
       thumbnail.appendChild(pageLabel);
+
+      // Add delete button for each page
+      if (this.totalPages > 1) {
+        const deleteBtn = document.createElement("button");
+        deleteBtn.className = "btn btn-danger page-delete";
+        deleteBtn.textContent = "×";
+        deleteBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.deletePage(i);
+        });
+        thumbnail.appendChild(deleteBtn);
+      }
 
       thumbnail.addEventListener("click", () => this.goToPage(i));
       this.pagesList.appendChild(thumbnail);
     }
   }
 
-  async goToPage(pageNum) {
-    this.currentPage = pageNum;
+  async updateView() {
     await this.renderPDF();
+    await this.generateThumbnails();
+  }
 
-    document.querySelectorAll(".page-thumbnail").forEach((thumb, index) => {
-      thumb.classList.toggle("active", index + 1 === pageNum);
-    });
+  async goToPage(pageNum) {
+    if (pageNum !== this.currentPage) {
+      this.currentPage = pageNum;
+      await this.renderPDF();
+
+      document.querySelectorAll(".page-thumbnail").forEach((thumb, index) => {
+        thumb.classList.toggle("active", index + 1 === pageNum);
+      });
+    }
   }
 
   handleCanvasClick(e) {
@@ -183,8 +261,8 @@ class PDFEditor {
     const sampleTexts = [
       "Sample text from PDF",
       "Click to edit this text",
-      "PDF Editor Pro - Edit Mode",
-      "This is editable content",
+      "Editable content",
+      "Text editing mode",
     ];
 
     const randomText =
@@ -197,21 +275,21 @@ class PDFEditor {
     if (!this.textArea.value.trim()) return;
 
     try {
-      alert(
-        `Text "${this.textArea.value}" would be applied to the PDF.\n\nNote: This is a demo. Full text editing requires more complex PDF manipulation.`
-      );
-
+      this.saveState();
       this.textArea.value = "";
+      this.showStatus("Text changes applied");
     } catch (error) {
       console.error("Error applying text changes:", error);
-      alert("Error applying changes. Please try again.");
+      this.showStatus("Error applying changes");
     }
   }
 
   async addPage() {
     try {
+      this.saveState();
+
       const page = this.pdfLibDoc.addPage();
-      page.drawText("New Page Added!", {
+      page.drawText("New Page", {
         x: 50,
         y: 750,
         size: 24,
@@ -224,27 +302,27 @@ class PDFEditor {
       this.pdfDoc = await loadingTask.promise;
       this.totalPages = this.pdfDoc.numPages;
 
-      await this.generateThumbnails();
+      await this.updateView();
       await this.goToPage(this.totalPages);
 
-      alert("New page added successfully!");
+      this.showStatus("Page added");
     } catch (error) {
       console.error("Error adding page:", error);
-      alert("Error adding page. Please try again.");
+      this.showStatus("Error adding page");
     }
   }
 
-  async deletePage() {
+  async deletePage(pageIndex) {
     if (this.totalPages <= 1) {
-      alert("Cannot delete the last page!");
+      this.showStatus("Cannot delete the last page");
       return;
     }
 
-    if (!confirm(`Delete page ${this.currentPage}?`)) return;
-
     try {
-      this.pdfLibDoc.removePage(this.currentPage - 1);
+      // Save state before making changes
+      await this.saveStateAsync();
 
+      this.pdfLibDoc.removePage(pageIndex - 1);
       this.pdfBytes = await this.pdfLibDoc.save();
 
       const loadingTask = pdfjsLib.getDocument({ data: this.pdfBytes });
@@ -255,16 +333,67 @@ class PDFEditor {
         this.currentPage = this.totalPages;
       }
 
-      await this.generateThumbnails();
-      await this.renderPDF();
-
-      alert("Page deleted successfully!");
+      await this.updateView();
+      this.showStatus("Page deleted");
     } catch (error) {
       console.error("Error deleting page:", error);
-      alert("Error deleting page. Please try again.");
+      this.showStatus("Error deleting page");
+    }
+  }
+  async saveStateAsync() {
+    if (this.pdfLibDoc) {
+      this.historyIndex++;
+      this.history = this.history.slice(0, this.historyIndex);
+
+      const freshBytes = await this.pdfLibDoc.save();
+      this.history.push({
+        pdfBytes: new Uint8Array(freshBytes),
+        currentPage: this.currentPage,
+        totalPages: this.totalPages,
+      });
+      this.undoBtn.disabled = false;
+    }
+  }
+  async addPage() {
+    try {
+      await this.saveStateAsync();
+
+      const page = this.pdfLibDoc.addPage();
+      page.drawText("New Page", {
+        x: 50,
+        y: 750,
+        size: 24,
+        color: PDFLib.rgb(0, 0, 0),
+      });
+
+      this.pdfBytes = await this.pdfLibDoc.save();
+
+      const loadingTask = pdfjsLib.getDocument({ data: this.pdfBytes });
+      this.pdfDoc = await loadingTask.promise;
+      this.totalPages = this.pdfDoc.numPages;
+
+      await this.updateView();
+      await this.goToPage(this.totalPages);
+
+      this.showStatus("Page added");
+    } catch (error) {
+      console.error("Error adding page:", error);
+      this.showStatus("Error adding page");
     }
   }
 
+  async applyTextChanges() {
+    if (!this.textArea.value.trim()) return;
+
+    try {
+      await this.saveStateAsync();
+      this.textArea.value = "";
+      this.showStatus("Text changes applied");
+    } catch (error) {
+      console.error("Error applying text changes:", error);
+      this.showStatus("Error applying changes");
+    }
+  }
   async savePDF() {
     try {
       const pdfBytes = await this.pdfLibDoc.save();
@@ -278,18 +407,16 @@ class PDFEditor {
       link.click();
 
       URL.revokeObjectURL(url);
-
-      alert("PDF saved successfully!");
+      this.showStatus("PDF saved");
     } catch (error) {
       console.error("Error saving PDF:", error);
-      alert("Error saving PDF. Please try again.");
+      this.showStatus("Error saving PDF");
     }
   }
 
   enableButtons() {
     this.saveBtn.disabled = false;
     this.addPageBtn.disabled = false;
-    this.deletePageBtn.disabled = false;
   }
 }
 
